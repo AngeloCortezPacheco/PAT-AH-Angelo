@@ -13,7 +13,7 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": "./src",
   "types": ["vite/client"],
-  "ignoreDeprecations": "6.0"
+  "ignoreDeprecations": "5.0"
   },
   "include": ["src", "src/global.d.ts"]
 }
