@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
+import { Alert } from './entities/alert.entity';
+import { UserAlert } from './entities/user-alert.entity';
 
 export interface AlertRequest {
   email: string;
@@ -24,6 +28,10 @@ export class AlertService {
     @Inject('WEATHER_SERVICE') private weatherService: ClientProxy,
     @Inject('NOTIFICATION_SERVICE') private notificationService: ClientProxy,
     @Inject('USER_SERVICE') private userService: ClientProxy,
+    @InjectRepository(Alert)
+    private readonly alertRepository: Repository<Alert>,
+    @InjectRepository(UserAlert)
+    private readonly userAlertRepository: Repository<UserAlert>,
   ) {}
 
   private get webhookUrl() {
@@ -44,7 +52,21 @@ export class AlertService {
   async processClimateAlert(alertData: { tipo: string; fecha?: string; descripcion: string }): Promise<any> {
     this.logger.log(`Procesando alerta puntual: ${JSON.stringify(alertData)}`);
     try {
-      // 1) Obtener destinatarios del user-service
+      // 1) Crear y guardar la alerta en la base de datos
+      const alert = await this.createAlert({
+        alert_type: alertData.tipo,
+        description: alertData.descripcion,
+        severity_level: this.determineSeverityLevel(alertData.tipo),
+        effective_at: alertData.fecha ? new Date(alertData.fecha) : new Date(),
+        expires_at: this.calculateExpirationDate(alertData.tipo),
+        affected_region: {
+          type: 'Point',
+          coordinates: [-74.9723, -12.7861], // Huancavelica coordinates
+          properties: { region: 'Huancavelica' }
+        }
+      });
+
+      // 2) Obtener destinatarios del user-service
       const users = await firstValueFrom(this.userService.send('get_all_users', {}));
       
       // Filtrar solo usuarios con email válido (sin verificar recibe_alertas por ahora)
@@ -52,6 +74,7 @@ export class AlertService {
         ? users
             .filter((u: any) => u?.email && u.email.trim() !== '')
             .map((u: any) => ({
+              id: u.id || u.user_id || u.userId,
               email: u.email,
               name:
                 u.nombre || u.nombres || u.name ||
@@ -61,9 +84,9 @@ export class AlertService {
         : [];
 
       // Deduplicar por email
-      const uniqueMap = new Map<string, { email: string; name: string }>();
+      const uniqueMap = new Map<string, { id: string; email: string; name: string }>();
       for (const r of recipientsRaw) {
-        if (!uniqueMap.has(r.email)) uniqueMap.set(r.email, r);
+        if (!uniqueMap.has(r.email) && r.id) uniqueMap.set(r.email, r);
       }
       const recipients = Array.from(uniqueMap.values());
 
@@ -72,6 +95,9 @@ export class AlertService {
       if (recipients.length === 0) {
         this.logger.warn('⚠️ No hay destinatarios con email válido para enviar la alerta');
       }
+
+      // 3) Crear registros de user_alerts
+      await this.assignAlertToUsers(alert.alert_id, recipients.map(r => r.id));
 
       const reportMessage = alertData.descripcion;
       const useN8n = (process.env.USE_N8N_FOR_EMAIL || 'false').toLowerCase() === 'true';
@@ -152,6 +178,20 @@ export class AlertService {
         };
       }
 
+      // 1.5 Crear alerta en la base de datos
+      const alert = await this.createAlert({
+        alert_type: alertRequest.type || 'weather',
+        description: weatherReport?.message || 'Alerta meteorológica generada',
+        severity_level: 'medio',
+        effective_at: new Date(),
+        expires_at: this.calculateExpirationDate(alertRequest.type || 'weather'),
+        affected_region: {
+          type: 'Point',
+          coordinates: [-74.9723, -12.7861],
+          properties: { region: 'Huancavelica' }
+        }
+      });
+
       // 2. Resolver destinatarios desde user-service
       this.logger.log('Paso 2: Obteniendo destinatarios desde user-service...');
       const users = await firstValueFrom(this.userService.send('get_all_users', {}));
@@ -159,6 +199,7 @@ export class AlertService {
         ? users
             .filter((u: any) => u?.email && (u?.recibe_alertas ?? true))
             .map((u: any) => ({
+              id: u.id || u.user_id || u.userId,
               email: u.email,
               name:
                 u.nombre || u.nombres || u.name ||
@@ -166,11 +207,16 @@ export class AlertService {
                 'Agricultor/a',
             }))
         : [];
-      const uniq = new Map<string, { email: string; name: string }>();
+      const uniq = new Map<string, { id: string; email: string; name: string }>();
       for (const r of recipientsRaw) {
-        if (!uniq.has(r.email)) uniq.set(r.email, r);
+        if (!uniq.has(r.email) && r.id) uniq.set(r.email, r);
       }
       const recipients = Array.from(uniq.values());
+
+      // 2.5 Asignar alerta a usuarios
+      if (recipients.length > 0) {
+        await this.assignAlertToUsers(alert.alert_id, recipients.map(r => r.id));
+      }
 
       const reportMessage = weatherReport?.message || 'Alerta meteorológica generada';
       const useN8n = (process.env.USE_N8N_FOR_EMAIL || 'false').toLowerCase() === 'true';
@@ -249,6 +295,23 @@ export class AlertService {
         };
       }
 
+      // 2.5 Crear alerta de helada en la base de datos
+      const alert = await this.createAlert({
+        alert_type: 'helada',
+        description: 'Se ha detectado riesgo de helada en las próximas horas. Toma las medidas preventivas necesarias.',
+        severity_level: 'alto',
+        effective_at: new Date(),
+        expires_at: this.calculateExpirationDate('helada'),
+        affected_region: {
+          type: 'Point',
+          coordinates: [-74.9723, -12.7861],
+          properties: { region: 'Huancavelica' }
+        }
+      });
+
+      // 2.6 Asignar alerta al usuario específico (si tenemos su ID)
+      // Por ahora, solo enviamos el email como se hacía antes
+
       // 3. Enviar alerta de helada
       const emailResult = await firstValueFrom(
         this.notificationService.send('send_email', {
@@ -284,5 +347,80 @@ export class AlertService {
         error: error.message
       };
     }
+  }
+
+  // Métodos auxiliares para manejo de base de datos
+  private async createAlert(alertData: Partial<Alert>): Promise<Alert> {
+    const alert = this.alertRepository.create(alertData);
+    return await this.alertRepository.save(alert);
+  }
+
+  private async assignAlertToUsers(alertId: string, userIds: string[]): Promise<UserAlert[]> {
+    const userAlerts = userIds.map(userId => 
+      this.userAlertRepository.create({
+        alert_id: alertId,
+        user_id: userId,
+        is_read: false
+      })
+    );
+    return await this.userAlertRepository.save(userAlerts);
+  }
+
+  private determineSeverityLevel(alertType: string): string {
+    const severityMap: Record<string, string> = {
+      'helada': 'alto',
+      'granizada': 'alto', 
+      'lluvia': 'medio',
+      'sequia': 'medio',
+      'viento': 'bajo',
+      'temperatura': 'bajo'
+    };
+    return severityMap[alertType] || 'medio';
+  }
+
+  private calculateExpirationDate(alertType: string): Date {
+    const now = new Date();
+    const hoursToAdd = alertType === 'helada' ? 12 : 24; // Las heladas expiran más rápido
+    return new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
+  }
+
+  // Métodos para consultar alertas
+  async getActiveAlerts(): Promise<Alert[]> {
+    return await this.alertRepository.find({
+      where: {
+        expires_at: {
+          $gte: new Date()
+        } as any
+      },
+      relations: ['user_alerts'],
+      order: {
+        issued_at: 'DESC'
+      }
+    });
+  }
+
+  async getUserAlerts(userId: string): Promise<UserAlert[]> {
+    return await this.userAlertRepository.find({
+      where: {
+        user_id: userId
+      },
+      relations: ['alert'],
+      order: {
+        received_at: 'DESC'
+      }
+    });
+  }
+
+  async markAlertAsRead(userAlertId: string): Promise<UserAlert> {
+    const userAlert = await this.userAlertRepository.findOne({
+      where: { user_alert_id: userAlertId }
+    });
+    
+    if (userAlert) {
+      userAlert.is_read = true;
+      return await this.userAlertRepository.save(userAlert);
+    }
+    
+    throw new Error('User alert not found');
   }
 }

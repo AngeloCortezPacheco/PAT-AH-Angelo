@@ -1,66 +1,36 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn } from "typeorm";
+import { UserAlert } from './user-alert.entity';
 
-export enum TipoAlerta {
-  LLUVIA = 'lluvia',
-  TEMPERATURA = 'temperatura',
-  HELADA = 'helada',
-  SEQUIA = 'sequia',
-  VIENTO = 'viento'
-}
-
-export enum EstadoAlerta {
-  ACTIVA = 'activa',
-  ENVIADA = 'enviada',
-  CANCELADA = 'cancelada',
-  EXPIRADA = 'expirada'
-}
-
-@Entity("alerts")
+@Entity('alerts')
 export class Alert {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  alert_id: string;
 
-  @Column()
-  title: string;
+  @Column({ type: 'varchar', length: 50 })
+  alert_type: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({
-    type: 'enum',
-    enum: TipoAlerta,
-    default: TipoAlerta.LLUVIA
-  })
-  type: TipoAlerta;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  severity_level: string;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoAlerta,
-    default: EstadoAlerta.ACTIVA
-  })
-  status: EstadoAlerta;
+  @CreateDateColumn({ type: 'timestamp with time zone' })
+  issued_at: Date;
 
-  @Column()
-  stationId: number;
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  effective_at: Date;
 
-  @Column()
-  userId: number;
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  expires_at: Date;
 
-  @Column({ type: 'timestamp' })
-  timestamp: Date;
+  @Column({ type: 'jsonb', nullable: true })
+  affected_region: {
+    type: string;
+    coordinates: number[] | number[][];
+    properties?: Record<string, any>;
+  };
 
-  @Column({ type: 'timestamp', nullable: true })
-  expiresAt: Date;
-
-  @Column({ type: 'json', nullable: true })
-  params: any;
-
-  // Use a runtime require to avoid circular import issues at module-resolution time.
-  @OneToMany(() => require('./alert-canal.entity').AlertCanal, (alertCanal: any) => alertCanal.alert)
-  // Keep the property loosely typed to prevent TypeScript from trying to resolve the type
-  // during compilation (which can trigger circular resolution errors).
-  channels: any[];
-
-  @CreateDateColumn()
-  createdAt: Date;
+  @OneToMany(() => UserAlert, userAlert => userAlert.alert)
+  user_alerts: UserAlert[];
 }

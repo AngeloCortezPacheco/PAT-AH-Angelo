@@ -28,4 +28,10 @@ export class WeatherController {
     this.logger.log('Obteniendo datos meteorológicos...');
     return await this.weatherService.getCurrentWeatherData();
   }
+
+  @MessagePattern('save_historical_data')
+  async saveHistoricalData(): Promise<WeatherResponse> {
+    this.logger.log('Guardando datos históricos de SENAMHI...');
+    return await this.weatherService.saveHistoricalDataFromSenamhi();
+  }
 }

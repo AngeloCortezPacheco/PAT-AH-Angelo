@@ -2,12 +2,27 @@ import { Module } from '@nestjs/common';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlertController } from './alert.controller';
 import { AlertService } from './alert.service';
+import { Alert } from './entities/alert.entity';
+import { UserAlert } from './entities/user-alert.entity';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT, 10) || 5432,
+      username: process.env.DB_USERNAME || 'admin',
+      password: process.env.DB_PASSWORD || 'admin',
+      database: process.env.DB_NAME || 'alert_service',
+      entities: [Alert, UserAlert],
+      synchronize: process.env.NODE_ENV === 'development',
+      logging: process.env.NODE_ENV === 'development',
+    }),
+    TypeOrmModule.forFeature([Alert, UserAlert]),
     ClientsModule.register([
       {
         name: 'WEATHER_SERVICE',

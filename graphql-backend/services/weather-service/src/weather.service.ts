@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { Parser } from 'json2csv';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { WeatherForecast } from './entities/weather-forecast.entity';
+import { WeatherHistory } from './entities/weather-history.entity';
 
 export interface WeatherRecord {
   fecha_hora: string;
@@ -32,42 +32,36 @@ export class WeatherService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    @InjectRepository(WeatherForecast)
+    private readonly forecastRepository: Repository<WeatherForecast>,
+    @InjectRepository(WeatherHistory)
+    private readonly historyRepository: Repository<WeatherHistory>,
   ) {}
 
   async generateAndSaveWeatherReport(): Promise<WeatherResponse> {
     this.logger.log('Iniciando la generación del reporte de clima...');
     
     try {
-      const registros = await this.fetchAndFilterWeatherData();
-
-      if (registros.length === 0) {
-        this.logger.warn('No se encontraron registros de lluvia.');
+      const forecastData = await this.fetchWeatherForecastData();
+      
+      if (forecastData.length === 0) {
+        this.logger.warn('No se encontraron datos de pronóstico.');
         return {
           success: false,
-          message: 'No se encontraron datos de lluvia para generar el reporte.',
+          message: 'No se encontraron datos de pronóstico para generar el reporte.',
         };
       }
-      
-      const registrosConAnalisis = this.addRiskAnalysis(registros);
-      const csv = this.generateCsvFromData(registrosConAnalisis);
-      
-      // Asegurar que el directorio reports existe
-      const reportsDir = join(process.cwd(), 'reports');
-      if (!existsSync(reportsDir)) {
-        await mkdir(reportsDir, { recursive: true });
-      }
-      
-      const filePath = join(reportsDir, 'clima_huancavelica.csv');
-      await writeFile(filePath, csv);
 
-      this.logger.log(`Reporte guardado exitosamente en: ${filePath}`);
+      // Guardar los pronósticos en la base de datos
+      const savedForecasts = await this.saveForecastsToDatabase(forecastData);
+      
+      this.logger.log(`Pronósticos guardados exitosamente: ${savedForecasts.length} registros`);
       return {
         success: true,
-        message: `Reporte generado y guardado exitosamente`,
+        message: `Reporte de pronóstico generado y guardado exitosamente`,
         data: {
-          filePath,
-          recordCount: registrosConAnalisis.length,
-          records: registrosConAnalisis,
+          recordCount: savedForecasts.length,
+          forecasts: savedForecasts,
         },
       };
     } catch (error) {
@@ -84,13 +78,36 @@ export class WeatherService {
     this.logger.log('Obteniendo datos meteorológicos actuales...');
     
     try {
-      const registros = await this.fetchAndFilterWeatherData();
-      const registrosConAnalisis = this.addRiskAnalysis(registros);
+      // Obtener pronósticos de la base de datos
+      const forecasts = await this.forecastRepository.find({
+        where: {
+          forecast_time: {
+            $gte: new Date(),
+          } as any,
+        },
+        order: {
+          forecast_time: 'ASC',
+        },
+        take: 50, // Limitar a 50 registros más recientes
+      });
+
+      // Si no hay datos en la base de datos, obtener de la API
+      if (forecasts.length === 0) {
+        this.logger.log('No hay pronósticos en base de datos, obteniendo de API...');
+        const apiData = await this.fetchWeatherForecastData();
+        const savedForecasts = await this.saveForecastsToDatabase(apiData);
+        
+        return {
+          success: true,
+          message: 'Datos meteorológicos obtenidos de API y guardados exitosamente',
+          data: savedForecasts.map(this.transformForecastToWeatherRecord),
+        };
+      }
       
       return {
         success: true,
         message: 'Datos meteorológicos obtenidos exitosamente',
-        data: registrosConAnalisis,
+        data: forecasts.map(this.transformForecastToWeatherRecord),
       };
     } catch (error) {
       this.logger.error('Error al obtener datos meteorológicos', error.stack);
@@ -102,7 +119,7 @@ export class WeatherService {
     }
   }
 
-  private async fetchAndFilterWeatherData(): Promise<WeatherRecord[]> {
+  private async fetchWeatherForecastData(): Promise<WeatherForecast[]> {
     const apiKey = this.configService.get<string>('API_KEY');
     const lat = -12.7861;
     const lon = -74.9723;
@@ -114,18 +131,25 @@ export class WeatherService {
       const data = response.data;
       
       const forecastDays = data.forecast?.forecastday || [];
+      const location = {
+        name: 'Huancavelica',
+        latitude: lat,
+        longitude: lon,
+        coordinates: [lon, lat] as [number, number],
+      };
 
       return forecastDays.flatMap((dia: any) => 
-        dia.hour
-        .filter((hora: any) => hora.will_it_rain === 1)
-        .map((hora: any) => ({
-          fecha_hora: hora.time,
-          temp_c: hora.temp_c,
-          humedad: hora.humidity,
-          clima: hora.condition?.text || '',
-          prob_lluvia: hora.will_it_rain,
-          precip_mm: hora.precip_mm,
-        })),
+        dia.hour.map((hora: any) => {
+          const forecast = new WeatherForecast();
+          forecast.location = location;
+          forecast.forecast_time = new Date(hora.time);
+          forecast.temperature_celsius = hora.temp_c;
+          forecast.humidity_percentage = hora.humidity;
+          forecast.precipitation_prob = hora.chance_of_rain;
+          forecast.wind_speed_kmh = hora.wind_kph;
+          forecast.wind_direction = hora.wind_dir;
+          return forecast;
+        })
       );
     } catch (error) {
       this.logger.error('Error al obtener datos de la API del clima', error.stack);
@@ -133,16 +157,68 @@ export class WeatherService {
     }
   }
 
-  private addRiskAnalysis(registros: WeatherRecord[]): WeatherRecord[] {
-    return registros.map((reg) => ({
-      ...reg,
-      riesgo_helada: reg.temp_c <= 0,
-      riesgo_sequia: reg.precip_mm < 1 && reg.humedad < 40,
-    }));
+  private async saveForecastsToDatabase(forecasts: WeatherForecast[]): Promise<WeatherForecast[]> {
+    try {
+      return await this.forecastRepository.save(forecasts);
+    } catch (error) {
+      this.logger.error('Error al guardar pronósticos en base de datos', error.stack);
+      throw new Error('No se pudieron guardar los datos de pronóstico');
+    }
   }
 
-  private generateCsvFromData(data: WeatherRecord[]): string {
-    const json2csvParser = new Parser();
-    return json2csvParser.parse(data);
+  private transformForecastToWeatherRecord = (forecast: WeatherForecast): WeatherRecord => {
+    return {
+      fecha_hora: forecast.forecast_time.toISOString(),
+      temp_c: forecast.temperature_celsius,
+      humedad: forecast.humidity_percentage,
+      clima: 'N/A', // No disponible en la nueva estructura
+      prob_lluvia: forecast.precipitation_prob / 100, // Convertir porcentaje a decimal
+      precip_mm: 0, // No disponible directamente, se calcularía basado en probabilidad
+      riesgo_helada: forecast.temperature_celsius <= 0,
+      riesgo_sequia: forecast.precipitation_prob < 10 && forecast.humidity_percentage < 40,
+    };
+  };
+
+  // Método para guardar datos históricos desde archivo SENAMHI
+  async saveHistoricalDataFromSenamhi(): Promise<WeatherResponse> {
+    this.logger.log('Guardando datos históricos de SENAMHI...');
+    
+    try {
+      const { leerSenamhiExcel } = await import('./senamhi-reader');
+      const senamhiData = leerSenamhiExcel();
+      
+      const location = {
+        name: 'Huancavelica',
+        latitude: -12.7861,
+        longitude: -74.9723,
+        coordinates: [-74.9723, -12.7861] as [number, number],
+      };
+
+      const historicalRecords = senamhiData.map(record => {
+        const history = new WeatherHistory();
+        history.location = location;
+        history.recorded_time = new Date(record.fecha || Date.now());
+        history.temperature_celsius = (record.temp_min + record.temp_max) / 2; // Promedio
+        history.humidity_percentage = record.humedad;
+        history.precipitation_mm = record.precipitacion;
+        history.wind_speed_kmh = record.viento;
+        return history;
+      }).filter(record => !isNaN(record.recorded_time.getTime())); // Filtrar fechas inválidas
+
+      const savedRecords = await this.historyRepository.save(historicalRecords);
+      
+      return {
+        success: true,
+        message: `Datos históricos guardados exitosamente: ${savedRecords.length} registros`,
+        data: savedRecords,
+      };
+    } catch (error) {
+      this.logger.error('Error al guardar datos históricos', error.stack);
+      return {
+        success: false,
+        message: 'Error al guardar datos históricos',
+        error: error.message,
+      };
+    }
   }
 }
