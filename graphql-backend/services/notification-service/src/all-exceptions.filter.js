@@ -2,7 +2,6 @@ const { ArgumentsHost, Catch, ExceptionFilter, HttpException } = require('@nestj
 const { RpcException } = require('@nestjs/microservices');
 const logger = require('./logger');
 
-@Catch()
 class AllExceptionsFilter {
   constructor(log = logger) {
     this.log = log;

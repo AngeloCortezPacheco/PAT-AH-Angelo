@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { firstValueFrom } from 'rxjs';
-import { WeatherForecast } from './entities/weather-forecast.entity';
-import { WeatherHistory } from './entities/weather-history.entity';
+const { Injectable, Logger } = require('@nestjs/common');
+const { HttpService } = require('@nestjs/axios');
+const { ConfigService } = require('@nestjs/config');
+const { InjectRepository } = require('@nestjs/typeorm');
+const { firstValueFrom } = require('rxjs');
+const { WeatherForecast } = require('./entities/weather-forecast.entity');
+const { WeatherHistory } = require('./entities/weather-history.entity');
 
 /**
  * @typedef {Object} WeatherRecord
@@ -26,14 +26,11 @@ import { WeatherHistory } from './entities/weather-history.entity';
  * @property {string} [error]
  */
 
-@Injectable()
-export class WeatherService {
+class WeatherService {
   constructor(
     httpService,
     configService,
-    @InjectRepository(WeatherForecast)
     forecastRepository,
-    @InjectRepository(WeatherHistory)
     historyRepository,
   ) {
     this.logger = new Logger(WeatherService.name);
@@ -227,3 +224,5 @@ export class WeatherService {
     }
   }
 }
+
+module.exports = { WeatherService };

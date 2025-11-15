@@ -1,16 +1,16 @@
-import { Module } from '@nestjs/common';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { ConfigModule } from '@nestjs/config';
-import { HttpModule } from '@nestjs/axios';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { WeatherController } from './weather.controller';
-import { WeatherService } from './weather.service';
-import { RiesgoClimaService } from './riesgo-clima.service';
-import { WeatherForecast } from './entities/weather-forecast.entity';
-import { WeatherHistory } from './entities/weather-history.entity';
+const { Module } = require('@nestjs/common');
+const { PrometheusModule } = require('@willsoto/nestjs-prometheus');
+const { ConfigModule } = require('@nestjs/config');
+const { HttpModule } = require('@nestjs/axios');
+const { ClientsModule, Transport } = require('@nestjs/microservices');
+const { TypeOrmModule } = require('@nestjs/typeorm');
+const { WeatherController } = require('./weather.controller');
+const { WeatherService } = require('./weather.service');
+const { RiesgoClimaService } = require('./riesgo-clima.service');
+const { WeatherForecast } = require('./entities/weather-forecast.entity');
+const { WeatherHistory } = require('./entities/weather-history.entity');
 
-@Module({
+const moduleConfig = {
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
@@ -40,5 +40,8 @@ import { WeatherHistory } from './entities/weather-history.entity';
   ],
   controllers: [WeatherController],
   providers: [WeatherService, RiesgoClimaService],
-})
-export class AppModule {}
+};
+
+class AppModule {}
+
+module.exports = { AppModule };

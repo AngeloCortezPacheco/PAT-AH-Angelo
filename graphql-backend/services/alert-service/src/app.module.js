@@ -1,14 +1,14 @@
-import { Module } from '@nestjs/common';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ConfigModule } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AlertController } from './alert.controller';
-import { AlertService } from './alert.service';
-import { Alert } from './entities/alert.entity';
-import { UserAlert } from './entities/user-alert.entity';
+const { Module } = require('@nestjs/common');
+const { PrometheusModule } = require('@willsoto/nestjs-prometheus');
+const { ClientsModule, Transport } = require('@nestjs/microservices');
+const { ConfigModule } = require('@nestjs/config');
+const { TypeOrmModule } = require('@nestjs/typeorm');
+const { AlertController } = require('./alert.controller');
+const { AlertService } = require('./alert.service');
+const { Alert } = require('./entities/alert.entity');
+const { UserAlert } = require('./entities/user-alert.entity');
 
-@Module({
+const moduleConfig = {
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
@@ -53,5 +53,8 @@ import { UserAlert } from './entities/user-alert.entity';
   ],
   controllers: [AlertController],
   providers: [AlertService],
-})
-export class AppModule {}
+};
+
+class AppModule {}
+
+module.exports = { AppModule };

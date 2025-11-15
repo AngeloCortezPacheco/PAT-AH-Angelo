@@ -1,20 +1,11 @@
-import { IsString, IsOptional, IsNumber, IsDateString } from 'class-validator';
-
-export class CreateAlertDto {
-  @IsString()
-  tipo: string;
-
-  @IsString()
-  descripcion: string;
-
-  @IsDateString()
-  fecha: string;
-
-  @IsOptional()
-  @IsString()
-  ciudad?: string;
-
-  @IsOptional()
-  @IsNumber()
-  usuarioId?: number;
+class CreateAlertDto {
+  constructor() {
+    this.tipo = undefined;
+    this.descripcion = undefined;
+    this.fecha = undefined;
+    this.ciudad = undefined;
+    this.usuarioId = undefined;
+  }
 }
+
+module.exports = { CreateAlertDto };

@@ -1,22 +1,22 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { WeatherService } from './weather.service';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+const { Test } = require('@nestjs/testing');
+const { WeatherService } = require('./weather.service');
+const { HttpService } = require('@nestjs/axios');
+const { ConfigService } = require('@nestjs/config');
 
 describe('WeatherService', () => {
-  let service: WeatherService;
+  let service;
 
   beforeEach(async () => {
     const mockHttpService = { get: jest.fn(), post: jest.fn() };
     const mockConfigService = { get: jest.fn() };
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         WeatherService,
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
-    service = module.get<WeatherService>(WeatherService);
+    service = module.get(WeatherService);
   });
 
   it('should be defined', () => {

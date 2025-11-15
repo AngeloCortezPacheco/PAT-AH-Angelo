@@ -1,55 +1,69 @@
-import axios from 'axios';
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { firstValueFrom } from 'rxjs';
-import { Alert } from './entities/alert.entity';
-import { UserAlert } from './entities/user-alert.entity';
+const axios = require('axios');
+const { Injectable, Inject, Logger } = require('@nestjs/common');
+const { ClientProxy } = require('@nestjs/microservices');
+const { InjectRepository } = require('@nestjs/typeorm');
+const { Repository } = require('typeorm');
+const { firstValueFrom } = require('rxjs');
+const { Alert } = require('./entities/alert.entity');
+const { UserAlert } = require('./entities/user-alert.entity');
 
-export interface AlertRequest {
-  email: string;
-  userName: string;
-  type?: 'weather' | 'frost' | 'drought';
-}
+/**
+ * @typedef {Object} AlertRequest
+ * @property {string} email
+ * @property {string} userName
+ * @property {'weather' | 'frost' | 'drought'} [type]
+ */
 
-export interface AlertResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-  error?: string;
-}
+/**
+ * @typedef {Object} AlertResponse
+ * @property {boolean} success
+ * @property {string} message
+ * @property {any} [data]
+ * @property {string} [error]
+ */
 
-@Injectable()
-export class AlertService {
-  private readonly logger = new Logger(AlertService.name);
-
+class AlertService {
   constructor(
-    @Inject('WEATHER_SERVICE') private weatherService: ClientProxy,
-    @Inject('NOTIFICATION_SERVICE') private notificationService: ClientProxy,
-    @Inject('USER_SERVICE') private userService: ClientProxy,
-    @InjectRepository(Alert)
-    private readonly alertRepository: Repository<Alert>,
-    @InjectRepository(UserAlert)
-    private readonly userAlertRepository: Repository<UserAlert>,
-  ) {}
+    weatherService,
+    notificationService,
+    userService,
+    alertRepository,
+    userAlertRepository,
+  ) {
+    this.logger = new Logger(AlertService.name);
+    this.weatherService = weatherService;
+    this.notificationService = notificationService;
+    this.userService = userService;
+    this.alertRepository = alertRepository;
+    this.userAlertRepository = userAlertRepository;
+  }
 
-  private get webhookUrl() {
+  static get dependencies() {
+    return [
+      { token: 'WEATHER_SERVICE', type: 'inject' },
+      { token: 'NOTIFICATION_SERVICE', type: 'inject' },
+      { token: 'USER_SERVICE', type: 'inject' },
+      { token: 'getRepositoryToken', args: [Alert] },
+      { token: 'getRepositoryToken', args: [UserAlert] }
+    ];
+  }
+
+  get webhookUrl() {
     return process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/clima-alerta';
   }
 
-  private get webhookSecret() {
+  get webhookSecret() {
     return process.env.N8N_WEBHOOK_SECRET;
   }
 
-  private async postToN8n(payload: any) {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  async postToN8n(payload) {
+    const headers = { 'Content-Type': 'application/json' };
     if (this.webhookSecret) headers['x-n8n-signature'] = this.webhookSecret;
     await axios.post(this.webhookUrl, payload, { headers });
   }
 
   // Nuevo flujo: procesa una alerta puntual emitida por weather-service
-  async processClimateAlert(alertData: { tipo: string; fecha?: string; descripcion: string }): Promise<any> {
+  async processClimateAlert(alertData) {
     this.logger.log(`Procesando alerta puntual: ${JSON.stringify(alertData)}`);
     try {
       // 1) Crear y guardar la alerta en la base de datos
@@ -72,8 +86,8 @@ export class AlertService {
       // Filtrar solo usuarios con email válido (sin verificar recibe_alertas por ahora)
       const recipientsRaw = Array.isArray(users)
         ? users
-            .filter((u: any) => u?.email && u.email.trim() !== '')
-            .map((u: any) => ({
+            .filter((u) => u?.email && u.email.trim() !== '')
+            .map((u) => ({
               id: u.id || u.user_id || u.userId,
               email: u.email,
               name:
@@ -84,7 +98,7 @@ export class AlertService {
         : [];
 
       // Deduplicar por email
-      const uniqueMap = new Map<string, { id: string; email: string; name: string }>();
+      const uniqueMap = new Map();
       for (const r of recipientsRaw) {
         if (!uniqueMap.has(r.email) && r.id) uniqueMap.set(r.email, r);
       }
@@ -159,7 +173,7 @@ export class AlertService {
     }
   }
 
-  async generateWeatherAlert(alertRequest: AlertRequest): Promise<AlertResponse> {
+  async generateWeatherAlert(alertRequest) {
     this.logger.log(`Generando alerta climática para: ${alertRequest.email}`);
     
     try {
@@ -197,8 +211,8 @@ export class AlertService {
       const users = await firstValueFrom(this.userService.send('get_all_users', {}));
       const recipientsRaw = Array.isArray(users)
         ? users
-            .filter((u: any) => u?.email && (u?.recibe_alertas ?? true))
-            .map((u: any) => ({
+            .filter((u) => u?.email && (u?.recibe_alertas ?? true))
+            .map((u) => ({
               id: u.id || u.user_id || u.userId,
               email: u.email,
               name:
@@ -207,7 +221,7 @@ export class AlertService {
                 'Agricultor/a',
             }))
         : [];
-      const uniq = new Map<string, { id: string; email: string; name: string }>();
+      const uniq = new Map();
       for (const r of recipientsRaw) {
         if (!uniq.has(r.email) && r.id) uniq.set(r.email, r);
       }
@@ -267,7 +281,7 @@ export class AlertService {
     }
   }
 
-  async generateFrostAlert(alertRequest: AlertRequest): Promise<AlertResponse> {
+  async generateFrostAlert(alertRequest) {
     this.logger.log(`Generando alerta de helada para: ${alertRequest.email}`);
     
     try {
@@ -285,7 +299,7 @@ export class AlertService {
       }
 
       // 2. Analizar riesgo de helada
-      const frostRisk = weatherData.data?.some((record: any) => record.riesgo_helada);
+      const frostRisk = weatherData.data?.some((record) => record.riesgo_helada);
       
       if (!frostRisk) {
         return {
@@ -350,12 +364,12 @@ export class AlertService {
   }
 
   // Métodos auxiliares para manejo de base de datos
-  private async createAlert(alertData: Partial<Alert>): Promise<Alert> {
+  async createAlert(alertData) {
     const alert = this.alertRepository.create(alertData);
     return await this.alertRepository.save(alert);
   }
 
-  private async assignAlertToUsers(alertId: string, userIds: string[]): Promise<UserAlert[]> {
+  async assignAlertToUsers(alertId, userIds) {
     const userAlerts = userIds.map(userId => 
       this.userAlertRepository.create({
         alert_id: alertId,
@@ -366,8 +380,8 @@ export class AlertService {
     return await this.userAlertRepository.save(userAlerts);
   }
 
-  private determineSeverityLevel(alertType: string): string {
-    const severityMap: Record<string, string> = {
+  determineSeverityLevel(alertType) {
+    const severityMap = {
       'helada': 'alto',
       'granizada': 'alto', 
       'lluvia': 'medio',
@@ -378,19 +392,19 @@ export class AlertService {
     return severityMap[alertType] || 'medio';
   }
 
-  private calculateExpirationDate(alertType: string): Date {
+  calculateExpirationDate(alertType) {
     const now = new Date();
     const hoursToAdd = alertType === 'helada' ? 12 : 24; // Las heladas expiran más rápido
     return new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
   }
 
   // Métodos para consultar alertas
-  async getActiveAlerts(): Promise<Alert[]> {
+  async getActiveAlerts() {
     return await this.alertRepository.find({
       where: {
         expires_at: {
           $gte: new Date()
-        } as any
+        }
       },
       relations: ['user_alerts'],
       order: {
@@ -399,7 +413,7 @@ export class AlertService {
     });
   }
 
-  async getUserAlerts(userId: string): Promise<UserAlert[]> {
+  async getUserAlerts(userId) {
     return await this.userAlertRepository.find({
       where: {
         user_id: userId
@@ -411,7 +425,7 @@ export class AlertService {
     });
   }
 
-  async markAlertAsRead(userAlertId: string): Promise<UserAlert> {
+  async markAlertAsRead(userAlertId) {
     const userAlert = await this.userAlertRepository.findOne({
       where: { user_alert_id: userAlertId }
     });
@@ -424,3 +438,5 @@ export class AlertService {
     throw new Error('User alert not found');
   }
 }
+
+module.exports = { AlertService };

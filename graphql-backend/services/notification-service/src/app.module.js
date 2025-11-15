@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { ConfigModule } from '@nestjs/config';
-import { MailModule } from './mail/mail.module';
-import { NotificationController } from './notification.controller';
-import { NotificationService } from './notification.service';
+const { Module } = require('@nestjs/common');
+const { PrometheusModule } = require('@willsoto/nestjs-prometheus');
+const { ConfigModule } = require('@nestjs/config');
+const { MailModule } = require('./mail/mail.module');
+const { NotificationController } = require('./notification.controller');
+const { NotificationService } = require('./notification.service');
 
-@Module({
+const moduleConfig = {
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     MailModule,
@@ -13,5 +13,8 @@ import { NotificationService } from './notification.service';
   ],
   controllers: [NotificationController],
   providers: [NotificationService],
-})
-export class AppModule {}
+};
+
+class AppModule {}
+
+module.exports = { AppModule };

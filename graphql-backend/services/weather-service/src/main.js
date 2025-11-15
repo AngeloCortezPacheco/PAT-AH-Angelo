@@ -1,9 +1,9 @@
-import { ValidationPipe } from '@nestjs/common';
-import { AllExceptionsFilter } from './all-exceptions.filter';
-import { NestFactory } from '@nestjs/core';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { AppModule } from './app.module';
-import logger from './logger';
+const { ValidationPipe } = require('@nestjs/common');
+const { AllExceptionsFilter } = require('./all-exceptions.filter');
+const { NestFactory } = require('@nestjs/core');
+const { Transport } = require('@nestjs/microservices');
+const { AppModule } = require('./app.module');
+const logger = require('./logger');
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {

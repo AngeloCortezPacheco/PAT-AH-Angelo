@@ -1,5 +1,5 @@
-import { Test } from '@nestjs/testing';
-import { AlertService } from './alert.service';
+const { Test } = require('@nestjs/testing');
+const { AlertService } = require('./alert.service');
 
 describe('AlertService', () => {
   let service;

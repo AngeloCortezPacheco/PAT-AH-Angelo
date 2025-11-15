@@ -1,7 +1,7 @@
-import { NestFactory } from '@nestjs/core';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { AppModule } from './app.module';
-import { Logger } from '@nestjs/common';
+const { NestFactory } = require('@nestjs/core');
+const { Transport } = require('@nestjs/microservices');
+const { AppModule } = require('./app.module');
+const { Logger } = require('@nestjs/common');
 
 async function bootstrap() {
   const logger = new Logger('AlertService');

@@ -1,37 +1,34 @@
-import { Controller, Logger } from '@nestjs/common';
-import { MessagePattern } from '@nestjs/microservices';
-import { WeatherService, WeatherResponse } from './weather.service';
-import { RiesgoClimaService } from './riesgo-clima.service';
+const { Controller, Logger } = require('@nestjs/common');
+const { MessagePattern } = require('@nestjs/microservices');
+const { WeatherService } = require('./weather.service');
+const { RiesgoClimaService } = require('./riesgo-clima.service');
 
-@Controller()
-export class WeatherController {
-  private readonly logger = new Logger(WeatherController.name);
+class WeatherController {
+  constructor(weatherService, riesgoClimaService) {
+    this.logger = new Logger(WeatherController.name);
+    this.weatherService = weatherService;
+    this.riesgoClimaService = riesgoClimaService;
+  }
 
-  constructor(
-    private readonly weatherService: WeatherService,
-    private readonly riesgoClimaService: RiesgoClimaService,
-  ) {}
-  @MessagePattern('get_climate_alerts')
   async getClimateAlerts() {
     this.logger.log('Generando alertas climáticas...');
     return await this.riesgoClimaService.generarAlertas();
   }
 
-  @MessagePattern('generate_weather_report')
-  async generateWeatherReport(): Promise<WeatherResponse> {
+  async generateWeatherReport() {
     this.logger.log('Generando reporte meteorológico...');
     return await this.weatherService.generateAndSaveWeatherReport();
   }
 
-  @MessagePattern('get_weather_data')
-  async getWeatherData(): Promise<WeatherResponse> {
+  async getWeatherData() {
     this.logger.log('Obteniendo datos meteorológicos...');
     return await this.weatherService.getCurrentWeatherData();
   }
 
-  @MessagePattern('save_historical_data')
-  async saveHistoricalData(): Promise<WeatherResponse> {
+  async saveHistoricalData() {
     this.logger.log('Guardando datos históricos de SENAMHI...');
     return await this.weatherService.saveHistoricalDataFromSenamhi();
   }
 }
+
+module.exports = { WeatherController };
