@@ -1,12 +1,12 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { AlertService } from './alert.service';
 
 describe('AlertService', () => {
-  let service: AlertService;
+  let service;
 
   beforeEach(async () => {
     const mockClient = { send: jest.fn(), emit: jest.fn() };
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         AlertService,
         { provide: 'WEATHER_SERVICE', useValue: mockClient },
@@ -14,12 +14,13 @@ describe('AlertService', () => {
         { provide: 'USER_SERVICE', useValue: mockClient },
       ],
     }).compile();
-    service = module.get<AlertService>(AlertService);
+    service = module.get(AlertService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // Agrega aquí más tests unitarios
+  // Add more unit tests here
 });
+

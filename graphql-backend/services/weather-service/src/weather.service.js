@@ -2,43 +2,48 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { WeatherForecast } from './entities/weather-forecast.entity';
 import { WeatherHistory } from './entities/weather-history.entity';
 
-export interface WeatherRecord {
-  fecha_hora: string;
-  temp_c: number;
-  humedad: number;
-  clima: string;
-  prob_lluvia: number;
-  precip_mm: number;
-  riesgo_helada?: boolean;
-  riesgo_sequia?: boolean;
-}
+/**
+ * @typedef {Object} WeatherRecord
+ * @property {string} fecha_hora
+ * @property {number} temp_c
+ * @property {number} humedad
+ * @property {string} clima
+ * @property {number} prob_lluvia
+ * @property {number} precip_mm
+ * @property {boolean} [riesgo_helada]
+ * @property {boolean} [riesgo_sequia]
+ */
 
-export interface WeatherResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-  error?: string;
-}
+/**
+ * @typedef {Object} WeatherResponse
+ * @property {boolean} success
+ * @property {string} message
+ * @property {any} [data]
+ * @property {string} [error]
+ */
 
 @Injectable()
 export class WeatherService {
-  private readonly logger = new Logger(WeatherService.name);
-
   constructor(
-    private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    httpService,
+    configService,
     @InjectRepository(WeatherForecast)
-    private readonly forecastRepository: Repository<WeatherForecast>,
+    forecastRepository,
     @InjectRepository(WeatherHistory)
-    private readonly historyRepository: Repository<WeatherHistory>,
-  ) {}
+    historyRepository,
+  ) {
+    this.logger = new Logger(WeatherService.name);
+    this.httpService = httpService;
+    this.configService = configService;
+    this.forecastRepository = forecastRepository;
+    this.historyRepository = historyRepository;
+  }
 
-  async generateAndSaveWeatherReport(): Promise<WeatherResponse> {
+  async generateAndSaveWeatherReport() {
     this.logger.log('Iniciando la generación del reporte de clima...');
     
     try {
@@ -74,7 +79,7 @@ export class WeatherService {
     }
   }
 
-  async getCurrentWeatherData(): Promise<WeatherResponse> {
+  async getCurrentWeatherData() {
     this.logger.log('Obteniendo datos meteorológicos actuales...');
     
     try {
@@ -83,7 +88,7 @@ export class WeatherService {
         where: {
           forecast_time: {
             $gte: new Date(),
-          } as any,
+          },
         },
         order: {
           forecast_time: 'ASC',
@@ -119,8 +124,8 @@ export class WeatherService {
     }
   }
 
-  private async fetchWeatherForecastData(): Promise<WeatherForecast[]> {
-    const apiKey = this.configService.get<string>('API_KEY');
+  async fetchWeatherForecastData() {
+    const apiKey = this.configService.get('API_KEY');
     const lat = -12.7861;
     const lon = -74.9723;
 
@@ -135,11 +140,11 @@ export class WeatherService {
         name: 'Huancavelica',
         latitude: lat,
         longitude: lon,
-        coordinates: [lon, lat] as [number, number],
+        coordinates: [lon, lat],
       };
 
-      return forecastDays.flatMap((dia: any) => 
-        dia.hour.map((hora: any) => {
+      return forecastDays.flatMap((dia) => 
+        dia.hour.map((hora) => {
           const forecast = new WeatherForecast();
           forecast.location = location;
           forecast.forecast_time = new Date(hora.time);
@@ -157,7 +162,7 @@ export class WeatherService {
     }
   }
 
-  private async saveForecastsToDatabase(forecasts: WeatherForecast[]): Promise<WeatherForecast[]> {
+  async saveForecastsToDatabase(forecasts) {
     try {
       return await this.forecastRepository.save(forecasts);
     } catch (error) {
@@ -166,7 +171,7 @@ export class WeatherService {
     }
   }
 
-  private transformForecastToWeatherRecord = (forecast: WeatherForecast): WeatherRecord => {
+  transformForecastToWeatherRecord = (forecast) => {
     return {
       fecha_hora: forecast.forecast_time.toISOString(),
       temp_c: forecast.temperature_celsius,
@@ -180,7 +185,7 @@ export class WeatherService {
   };
 
   // Método para guardar datos históricos desde archivo SENAMHI
-  async saveHistoricalDataFromSenamhi(): Promise<WeatherResponse> {
+  async saveHistoricalDataFromSenamhi() {
     this.logger.log('Guardando datos históricos de SENAMHI...');
     
     try {
@@ -191,7 +196,7 @@ export class WeatherService {
         name: 'Huancavelica',
         latitude: -12.7861,
         longitude: -74.9723,
-        coordinates: [-74.9723, -12.7861] as [number, number],
+        coordinates: [-74.9723, -12.7861],
       };
 
       const historicalRecords = senamhiData.map(record => {
