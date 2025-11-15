@@ -1,19 +1,19 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { NotificationService } from './notification.service';
-import { MailService } from './mail/mail.service';
+const { Test, TestingModule } = require('@nestjs/testing');
+const { NotificationService } = require('./notification.service');
+const { MailService } = require('./mail/mail.service');
 
 describe('NotificationService', () => {
-  let service: NotificationService;
+  let service;
 
   beforeEach(async () => {
     const mockMailService = { sendMail: jest.fn(), sendPlainTextMail: jest.fn(), sendWelcomeEmail: jest.fn() };
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         NotificationService,
         { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
-    service = module.get<NotificationService>(NotificationService);
+    service = module.get(NotificationService);
   });
 
   it('should be defined', () => {

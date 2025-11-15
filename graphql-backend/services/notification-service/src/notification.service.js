@@ -1,24 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { MailService } from './mail/mail.service';
+const { Logger } = require('@nestjs/common');
+const MailService = require('./mail/mail.service');
 
-export interface NotificationResponse {
-  success: boolean;
-  message: string;
-  error?: string;
-}
+class NotificationService {
+  constructor(mailService) {
+    this.mailService = mailService;
+    this.logger = new Logger(NotificationService.name);
+  }
 
-@Injectable()
-export class NotificationService {
-  private readonly logger = new Logger(NotificationService.name);
-
-  constructor(private readonly mailService: MailService) {}
-
-  async sendEmail(
-    to: string,
-    subject: string,
-    template: string,
-    context: any
-  ): Promise<NotificationResponse> {
+  async sendEmail(to, subject, template, context) {
     try {
       await this.mailService.sendMail(to, subject, template, context);
       return {
@@ -35,11 +24,7 @@ export class NotificationService {
     }
   }
 
-  async sendPlainTextEmail(
-    to: string,
-    subject: string,
-    text: string
-  ): Promise<NotificationResponse> {
+  async sendPlainTextEmail(to, subject, text) {
     try {
       await this.mailService.sendPlainTextMail(to, subject, text);
       return {
@@ -56,7 +41,7 @@ export class NotificationService {
     }
   }
 
-  async sendWelcomeEmail(to: string, name: string): Promise<NotificationResponse> {
+  async sendWelcomeEmail(to, name) {
     try {
       await this.mailService.sendWelcomeEmail(to, name);
       return {
@@ -73,7 +58,7 @@ export class NotificationService {
     }
   }
 
-  async sendWeatherAlert(to: string, name: string, reportMessage: string): Promise<NotificationResponse> {
+  async sendWeatherAlert(to, name, reportMessage) {
     try {
       await this.mailService.sendWeatherAlert(to, name, reportMessage);
       return {
@@ -90,3 +75,5 @@ export class NotificationService {
     }
   }
 }
+
+module.exports = NotificationService;
